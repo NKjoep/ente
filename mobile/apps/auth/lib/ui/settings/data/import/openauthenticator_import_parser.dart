@@ -34,6 +34,7 @@ const int _tagLengthBits = _tagLengthBytes * 8;
 /// SHA-256 block size, required by [HMac].
 const int _sha256BlockSize = 64;
 const int _sha256DigestLength = 32;
+const int _backupSaltLength = 32;
 
 const int _minOtpDigits = 1;
 const int _maxOtpDigits = 10;
@@ -107,8 +108,10 @@ Map<String, dynamic> decodeOpenAuthenticatorBackup(String jsonString) {
   }
 
   try {
+    final salt = base64Decode(backup[_saltKey] as String);
     final signature = base64Decode(backup[_passwordSignatureKey] as String);
-    if (signature.length != _sha256DigestLength) {
+    if (salt.length != _backupSaltLength ||
+        signature.length != _sha256DigestLength) {
       throw const InvalidOpenAuthenticatorBackupException();
     }
   } on FormatException {

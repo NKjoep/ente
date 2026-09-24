@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:ente_auth/models/code.dart';
@@ -143,6 +144,16 @@ void main() {
       expect(
         () => decryptOpenAuthenticatorBackup(backup, password: 'not-dummy'),
         throwsA(isA<IncorrectOpenAuthenticatorPasswordException>()),
+      );
+    });
+
+    test('rejects an invalid salt before password verification', () {
+      final backup = decodeOpenAuthenticatorBackup(_fixtureContent())
+        ..['salt'] = 'not-base64';
+
+      expect(
+        () => decodeOpenAuthenticatorBackup(jsonEncode(backup)),
+        throwsA(isA<InvalidOpenAuthenticatorBackupException>()),
       );
     });
 
