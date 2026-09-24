@@ -99,6 +99,18 @@ void main() {
       expect(codes[0].display.isCustomIcon, isFalse);
     });
 
+    test('rejects a present optional field that fails authentication', () {
+      final backup = decodeOpenAuthenticatorBackup(_fixtureContent());
+      final firstEntry = (backup['totps'] as List).first as Map;
+      final label = firstEntry['label'] as List;
+      label[0] = (label[0] as int) ^ 1;
+
+      expect(
+        () => decryptOpenAuthenticatorBackup(backup, password: 'dummy'),
+        throwsA(isA<OpenAuthenticatorEntryParseException>()),
+      );
+    });
+
     test('rejects a wrong password', () {
       final backup = decodeOpenAuthenticatorBackup(_fixtureContent());
 

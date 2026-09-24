@@ -209,11 +209,20 @@ Map<String, Object?> _decryptEntry(
     );
   }
 
+  final String? label;
+  final String? issuer;
+  try {
+    label = _decryptOptionalField(key, entryMap, fieldName: _labelKey);
+    issuer = _decryptOptionalField(key, entryMap, fieldName: _issuerKey);
+  } on Object catch (error) {
+    throw OpenAuthenticatorEntryParseException(entry: entry, error: error);
+  }
+
   return {
     _uuidKey: entryMap[_uuidKey] is String ? entryMap[_uuidKey] : null,
     _secretKey: secret,
-    _labelKey: _decryptOptionalField(key, entryMap[_labelKey]),
-    _issuerKey: _decryptOptionalField(key, entryMap[_issuerKey]),
+    _labelKey: label,
+    _issuerKey: issuer,
     _algorithmKey: entryMap[_algorithmKey] is String
         ? entryMap[_algorithmKey]
         : null,
@@ -222,9 +231,23 @@ Map<String, Object?> _decryptEntry(
   };
 }
 
-String? _decryptOptionalField(Uint8List key, Object? value) {
-  final bytes = _tryToBytes(value);
-  return bytes == null ? null : _decryptField(key, bytes);
+String? _decryptOptionalField(
+  Uint8List key,
+  Map<String, dynamic> entry, {
+  required String fieldName,
+}) {
+  if (!entry.containsKey(fieldName)) return null;
+
+  final bytes = _tryToBytes(entry[fieldName]);
+  if (bytes == null) {
+    throw FormatException('malformed encrypted field: $fieldName');
+  }
+
+  final decrypted = _decryptField(key, bytes);
+  if (decrypted == null) {
+    throw FormatException('could not decrypt field: $fieldName');
+  }
+  return decrypted;
 }
 
 /// Decrypts a single `nonce(12) || ciphertext || tag(16)` field.
