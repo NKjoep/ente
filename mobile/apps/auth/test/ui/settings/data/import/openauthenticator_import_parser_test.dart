@@ -78,6 +78,32 @@ void main() {
       expect(codes[3].issuer, isEmpty);
     });
 
+    test('preserves colons in labels without an issuer', () {
+      final codes = parseOpenAuthenticatorEntries([
+        {
+          'secret': 'JBSWY3DPEHPK3PXP',
+          'label': 'team:alice',
+          'algorithm': 'SHA1',
+          'digits': 6,
+          'validity': 30,
+        },
+      ]);
+
+      expect(codes.single.account, 'team:alice');
+      expect(codes.single.issuer, isEmpty);
+    });
+
+    test('rejects an unsupported explicit digit count', () {
+      final backup = decodeOpenAuthenticatorBackup(_fixtureContent());
+      final firstEntry = (backup['totps'] as List).first as Map;
+      firstEntry['digits'] = 11;
+
+      expect(
+        () => decryptOpenAuthenticatorBackup(backup, password: 'dummy'),
+        throwsA(isA<OpenAuthenticatorEntryParseException>()),
+      );
+    });
+
     test(
       'falls back to an entry encryptionSalt that differs from the backup',
       () {
@@ -126,6 +152,8 @@ void main() {
         '[]',
         '{}',
         '{"salt": "AA==", "totps": []}',
+        '{"salt": "AA==", "passwordSignature": "x", "totps": []}',
+        '{"salt": "AA==", "passwordSignature": "AA==", "totps": []}',
         '{"salt": "AA==", "passwordSignature": "x", "totps": "nope"}',
       ];
 

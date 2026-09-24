@@ -33,6 +33,10 @@ const int _tagLengthBits = _tagLengthBytes * 8;
 
 /// SHA-256 block size, required by [HMac].
 const int _sha256BlockSize = 64;
+const int _sha256DigestLength = 32;
+
+const int _minOtpDigits = 1;
+const int _maxOtpDigits = 10;
 
 // Backup JSON keys. The same keys are reused for the decrypted entry payload
 // that is passed back across the isolate boundary.
@@ -101,6 +105,16 @@ Map<String, dynamic> decodeOpenAuthenticatorBackup(String jsonString) {
       backup[_totpsKey] is! List) {
     throw const InvalidOpenAuthenticatorBackupException();
   }
+
+  try {
+    final signature = base64Decode(backup[_passwordSignatureKey] as String);
+    if (signature.length != _sha256DigestLength) {
+      throw const InvalidOpenAuthenticatorBackupException();
+    }
+  } on FormatException {
+    throw const InvalidOpenAuthenticatorBackupException();
+  }
+
   return backup;
 }
 
@@ -211,9 +225,14 @@ Map<String, Object?> _decryptEntry(
 
   final String? label;
   final String? issuer;
+  final int? digits;
   try {
     label = _decryptOptionalField(key, entryMap, fieldName: _labelKey);
     issuer = _decryptOptionalField(key, entryMap, fieldName: _issuerKey);
+    digits = _normalizeDigits(
+      entryMap[_digitsKey],
+      present: entryMap.containsKey(_digitsKey),
+    );
   } on Object catch (error) {
     throw OpenAuthenticatorEntryParseException(entry: entry, error: error);
   }
@@ -226,7 +245,7 @@ Map<String, Object?> _decryptEntry(
     _algorithmKey: entryMap[_algorithmKey] is String
         ? entryMap[_algorithmKey]
         : null,
-    _digitsKey: entryMap[_digitsKey] is int ? entryMap[_digitsKey] : null,
+    if (digits != null) _digitsKey: digits,
     _validityKey: entryMap[_validityKey] is int ? entryMap[_validityKey] : null,
   };
 }
@@ -284,8 +303,11 @@ Code _toCode(Map<String, Object?> entry) {
 
   final encodedIssuer = Uri.encodeComponent(issuer ?? '');
   final encodedAccount = Uri.encodeComponent(account);
+  // Keep an explicit empty issuer separator. Code._getAccount uses the first
+  // colon in the path as the issuer/account boundary, so omitting it would
+  // truncate issuer-less labels that contain a colon.
   final path = issuer == null
-      ? encodedAccount
+      ? ':$encodedAccount'
       : '$encodedIssuer:$encodedAccount';
 
   final buffer = StringBuffer(
@@ -296,7 +318,10 @@ Code _toCode(Map<String, Object?> entry) {
   if (algorithm != null) {
     buffer.write('&algorithm=$algorithm');
   }
-  final digits = _normalizeDigits(entry[_digitsKey]);
+  final digits = _normalizeDigits(
+    entry[_digitsKey],
+    present: entry.containsKey(_digitsKey),
+  );
   if (digits != null) {
     buffer.write('&digits=$digits');
   }
@@ -347,9 +372,10 @@ String? _normalizeAlgorithm(Object? value) {
   return null;
 }
 
-int? _normalizeDigits(Object? value) {
-  if (value is! int || value < 1 || value > 10) {
-    return null;
+int? _normalizeDigits(Object? value, {required bool present}) {
+  if (!present) return null;
+  if (value is! int || value < _minOtpDigits || value > _maxOtpDigits) {
+    throw FormatException('Invalid OTP digits: $value');
   }
   return value;
 }
